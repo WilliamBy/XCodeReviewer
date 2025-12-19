@@ -1,0 +1,173 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Whites and Light Greys */
+    --background: 0 0% 100%;       /* #FFFFFF */
+    --foreground: 222 47% 11%;     /* #0F172A - Slate 900 */
+
+    /* Card & Surfaces - Clean White with Borders */
+    --card: 0 0% 100%;             /* #FFFFFF */
+    --card-foreground: 222 47% 11%; /* #0F172A */
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Primary - Corporate Blue #0066FF (216, 100%, 50%) */
+    --primary: 216 100% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Lighter Blue / Surface */
+    --secondary: 210 40% 96.1%;    /* #F1F5F9 - Slate 100 */
+    --secondary-foreground: 222 47% 11%;
+
+    /* Muted - Slate 100/500 */
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215 16% 47%; /* #64748B - Slate 500 */
+
+    /* Accent - Subtle Blue Highlight */
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222 47% 11%;
+
+    /* Destructive */
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    /* Borders */
+    --border: 214 32% 91%;        /* #E2E8F0 - Slate 200 */
+    --input: 214 32% 91%;
+    --ring: 216 100% 50%;         /* Primary Blue */
+
+    --radius: 0.5rem;             /* 8px */
+  }
+
+  .dark {
+    /* Fallback for dark mode toggle if accidentally hit - keep it usable but we prefer light */
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 216 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 32.6% 17.5%;
+    --input: 217 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased font-sans;
+    background-color: #f8fafc; /* Slate 50 - Very Subtle Grey Background for depth */
+  }
+  
+  /* Typography Overrides */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-sans tracking-tight text-slate-900 font-bold;
+  }
+  h1 { @apply text-3xl; }
+  h2 { @apply text-2xl; }
+  h3 { @apply text-xl; }
+}
+
+@layer utilities {
+  /* ============ Cloud Cards ============ */
+  .cloud-card {
+    @apply bg-white border border-slate-100 rounded-lg shadow-card transition-all duration-200;
+  }
+  
+  .cloud-card:hover {
+    @apply shadow-card-hover transform -translate-y-[2px];
+  }
+
+  /* Replaces cyber-card */
+  .cyber-card {
+    @apply cloud-card;
+  }
+  
+  /* ============ Buttons ============ */
+  .btn-primary {
+    @apply bg-primary text-white font-medium px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors shadow-sm;
+  }
+  
+  /* Legacy compat classes mapped to new styles */
+  .cyber-btn {
+    @apply inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
+    @apply h-10 px-4 py-2;
+  }
+  
+  .cyber-btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90;
+  }
+  
+  .cyber-btn-success {
+    @apply bg-emerald-500 text-white hover:bg-emerald-600;
+  }
+  
+  .cyber-btn-ghost {
+    @apply hover:bg-slate-100 hover:text-slate-900;
+  }
+
+  /* ============ Badges ============ */
+  .cyber-badge {
+    @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+  }
+  
+  .cyber-badge-primary {
+    @apply border-transparent bg-blue-50 text-blue-700 hover:bg-blue-100;
+  }
+
+  .cyber-badge-success {
+    @apply border-transparent bg-emerald-50 text-emerald-700 hover:bg-emerald-100;
+  }
+  
+  .cyber-badge-warning {
+    @apply border-transparent bg-amber-50 text-amber-700 hover:bg-amber-100;
+  }
+
+  .cyber-badge-danger {
+    @apply border-transparent bg-red-50 text-red-700 hover:bg-red-100;
+  }
+  
+  .cyber-badge-info {
+    @apply border-transparent bg-sky-50 text-sky-700 hover:bg-sky-100;
+  }
+  
+  .cyber-badge-muted {
+    @apply border-transparent bg-slate-100 text-slate-500;
+  }
+
+  /* ============ Helpers ============ */
+  .gradient-bg {
+    @apply bg-slate-50;
+    background-image: linear-gradient(to bottom right, #eff6ff, #f8fafc);
+  }
+  
+  .section-header {
+    @apply flex items-center justify-between pb-4 mb-4 border-b border-slate-200;
+  }
+  
+  .section-title {
+    @apply text-xl font-bold text-slate-900;
+  }
+
+  /* Compatibility stubs for removed effects */
+  .scanline-overlay::before { display: none; }
+  .vignette::after { display: none; }
+  .text-glow-primary { text-shadow: none; }
+}

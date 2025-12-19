@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号 (例如: v1.0.0)'
+        description: '版本号 (例如: v3.0.0)'
         required: true
         type: string
       prerelease:
@@ -36,29 +36,52 @@ jobs:
         with:
           fetch-depth: 0
       
-      # 2. 设置 Node.js 环境
+      # 2. 设置 Node.js 环境（用于前端构建）
       - name: 设置 Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: '20'
       
       # 3. 安装 pnpm
       - name: 安装 pnpm
-        run: npm install -g pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
       
-      # 4. 安装依赖
-      - name: 安装依赖
-        run: pnpm install --no-frozen-lockfile
+      # 4. 获取 pnpm store 目录
+      - name: 获取 pnpm store 目录
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
       
-      # 5. 构建前端项目
-      - name: 构建项目
+      # 5. 设置 pnpm 缓存
+      - name: 设置 pnpm 缓存
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+      
+      # 6. 安装前端依赖
+      - name: 安装前端依赖
+        working-directory: ./frontend
+        run: pnpm install --frozen-lockfile
+      
+      # 7. 构建前端项目
+      - name: 构建前端项目
+        working-directory: ./frontend
         run: pnpm build
         env:
-          # 这里可以添加构建时需要的环境变量
           VITE_USE_LOCAL_DB: 'true'
       
-      # 6. 确定版本号
+      # 8. 设置 Python 环境（用于后端）
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      
+      # 9. 确定版本号
       - name: 确定版本号
         id: version
         run: |
@@ -69,20 +92,45 @@ jobs:
             echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
             echo "IS_PRERELEASE=false" >> $GITHUB_OUTPUT
           fi
+          VERSION_NO_V="${VERSION#v}"
+          echo "VERSION_NO_V=$VERSION_NO_V" >> $GITHUB_OUTPUT
       
-      # 7. 打包构建产物
+      # 10. 打包构建产物
       - name: 打包构建产物
         run: |
           # 创建发布目录
           mkdir -p release
           
           # 打包前端构建产物
-          tar -czf release/xcode-reviewer-frontend-${{ steps.version.outputs.VERSION }}.tar.gz -C dist .
+          tar -czf release/deepaudit-frontend-${{ steps.version.outputs.VERSION }}.tar.gz -C frontend/dist .
+          
+          # 打包后端源码
+          tar -czf release/deepaudit-backend-${{ steps.version.outputs.VERSION }}.tar.gz \
+            --exclude=backend/.venv \
+            --exclude=backend/.env \
+            --exclude=backend/__pycache__ \
+            --exclude=backend/uploads \
+            backend/
+          
+          # 打包 Docker 配置文件（包含 Agent 模式配置）
+          tar -czf release/deepaudit-docker-${{ steps.version.outputs.VERSION }}.tar.gz \
+            docker-compose.yml \
+            backend/Dockerfile \
+            backend/.dockerignore \
+            frontend/Dockerfile \
+            frontend/.dockerignore \
+            frontend/docker-entrypoint.sh \
+            backend/env.example \
+            frontend/.env.example \
+            docker/sandbox/
           
           # 打包完整源码（包括配置文件）
-          tar -czf release/xcode-reviewer-source-${{ steps.version.outputs.VERSION }}.tar.gz \
-            --exclude=node_modules \
-            --exclude=dist \
+          tar -czf release/deepaudit-source-${{ steps.version.outputs.VERSION }}.tar.gz \
+            --exclude=frontend/node_modules \
+            --exclude=frontend/dist \
+            --exclude=backend/.venv \
+            --exclude=backend/.env \
+            --exclude=backend/uploads \
             --exclude=.git \
             --exclude=release \
             .
@@ -92,7 +140,7 @@ jobs:
           sha256sum * > checksums.txt
           cd ..
       
-      # 8. 生成更新日志
+      # 11. 生成更新日志
       - name: 生成更新日志
         id: changelog
         run: |
@@ -110,15 +158,35 @@ jobs:
           
           echo "" >> CHANGELOG.md
           echo "" >> CHANGELOG.md
-          echo "## 下载说明" >> CHANGELOG.md
+          echo "## 🚀 v3.0.0 新特性" >> CHANGELOG.md
           echo "" >> CHANGELOG.md
-          echo "- \`xcode-reviewer-frontend-*.tar.gz\`: 前端构建产物（用于部署）" >> CHANGELOG.md
-          echo "- \`xcode-reviewer-source-*.tar.gz\`: 完整源码包" >> CHANGELOG.md
+          echo "- 🤖 **Multi-Agent 架构**: Orchestrator/Analysis/Recon/Verification 多智能体协作" >> CHANGELOG.md
+          echo "- 🧠 **RAG 知识库增强**: 代码语义理解 + CWE/CVE 漏洞知识库" >> CHANGELOG.md
+          echo "- 🔒 **沙箱漏洞验证**: Docker 安全容器自动执行 PoC" >> CHANGELOG.md
+          echo "- 🛠️ **专业安全工具集成**: Semgrep, Bandit, Gitleaks, OSV-Scanner" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## 📦 下载说明" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "### 构建产物" >> CHANGELOG.md
+          echo "- \`deepaudit-frontend-*.tar.gz\`: 前端构建产物（用于生产部署）" >> CHANGELOG.md
+          echo "- \`deepaudit-backend-*.tar.gz\`: 后端源码包" >> CHANGELOG.md
+          echo "- \`deepaudit-docker-*.tar.gz\`: Docker 配置文件（包含沙箱配置）" >> CHANGELOG.md
+          echo "- \`deepaudit-source-*.tar.gz\`: 完整源码包" >> CHANGELOG.md
           echo "- \`checksums.txt\`: 文件校验和" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "### Docker 镜像" >> CHANGELOG.md
+          echo "- Frontend: \`ghcr.io/${{ github.repository_owner }}/deepaudit-frontend:${{ steps.version.outputs.VERSION }}\`" >> CHANGELOG.md
+          echo "- Backend: \`ghcr.io/${{ github.repository_owner }}/deepaudit-backend:${{ steps.version.outputs.VERSION }}\`" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "### 快速部署" >> CHANGELOG.md
+          echo "\`\`\`bash" >> CHANGELOG.md
+          echo "# 部署" >> CHANGELOG.md
+          echo "docker compose up -d" >> CHANGELOG.md
+          echo "\`\`\`" >> CHANGELOG.md
       
-      # 9. 创建 GitHub Release
+      # 12. 创建 GitHub Release
       - name: 创建 Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
           name: Release ${{ steps.version.outputs.VERSION }}
@@ -131,7 +199,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
-      # 10. 登录 GitHub Container Registry
+      # 13. 登录 GitHub Container Registry
       - name: 登录到 GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -139,41 +207,65 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
-      # 11. 设置 QEMU（用于多架构构建）
+      # 14. 设置 QEMU（用于多架构构建）
       - name: 设置 QEMU
         uses: docker/setup-qemu-action@v3
       
-      # 12. 设置 Docker Buildx
+      # 15. 设置 Docker Buildx
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@v3
       
-      # 13. 构建并推送 Docker 镜像（多架构）
-      - name: 构建并推送 Docker 镜像
+      # 16. 构建并推送前端 Docker 镜像
+      - name: 构建并推送前端 Docker 镜像
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./frontend
+          file: ./frontend/Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          platforms: linux/amd64,linux/arm64
           tags: |
-            ghcr.io/${{ github.repository_owner }}/xcodereviewer:${{ steps.version.outputs.VERSION }}
-            ghcr.io/${{ github.repository_owner }}/xcodereviewer:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            VITE_USE_LOCAL_DB=true
+            ghcr.io/${{ github.repository_owner }}/deepaudit-frontend:${{ steps.version.outputs.VERSION }}
+            ghcr.io/${{ github.repository_owner }}/deepaudit-frontend:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
       
-      # 14. 更新 package.json 版本号（可选）
-      - name: 更新 package.json 版本
-        if: github.event_name == 'workflow_dispatch'
+      # 17. 构建并推送后端 Docker 镜像
+      - name: 构建并推送后端 Docker 镜像
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/deepaudit-backend:${{ steps.version.outputs.VERSION }}
+            ghcr.io/${{ github.repository_owner }}/deepaudit-backend:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+      
+      # 18. 构建并推送沙箱 Docker 镜像
+      - name: 构建并推送沙箱 Docker 镜像
+        uses: docker/build-push-action@v5
+        with:
+          context: ./docker/sandbox
+          file: ./docker/sandbox/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/deepaudit-sandbox:${{ steps.version.outputs.VERSION }}
+            ghcr.io/${{ github.repository_owner }}/deepaudit-sandbox:latest
+          cache-from: type=gha,scope=sandbox
+          cache-to: type=gha,mode=max,scope=sandbox
+      
+      # 19. 更新 README 中的版本号
+      - name: 更新 README 版本号
+        if: github.event_name == 'push'
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          VERSION_NO_V="${VERSION#v}"
-          npm version $VERSION_NO_V --no-git-tag-version
+          VERSION="${{ steps.version.outputs.VERSION_NO_V }}"
+          sed -i "s/version-[0-9]*\.[0-9]*\.[0-9]*/version-$VERSION/g" README.md
           
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json
-          git commit -m "chore: bump version to $VERSION" || true
+          git add README.md
+          git commit -m "docs: update README version to $VERSION" || true
           git push origin HEAD:main || true
-
-

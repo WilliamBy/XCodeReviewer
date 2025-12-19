@@ -1,95 +1,128 @@
+# =============================================
+# DeepAudit v3.0.0 Docker Compose 配置
+# =============================================
+# 部署: docker compose up -d
+# 查看日志: docker compose logs -f
+# 注意: Agent 服务和沙箱环境是必须的核心组件
+
 services:
-  # XCodeReviewer 前端应用
-  xcodereviewer:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      # 构建参数 - 从 .env 文件或环境变量传入
-      args:
-        # LLM 通用配置
-        - VITE_LLM_PROVIDER=${VITE_LLM_PROVIDER:-gemini}
-        - VITE_LLM_API_KEY=${VITE_LLM_API_KEY}
-        - VITE_LLM_MODEL=${VITE_LLM_MODEL}
-        - VITE_LLM_BASE_URL=${VITE_LLM_BASE_URL}
-        - VITE_LLM_TIMEOUT=${VITE_LLM_TIMEOUT:-150000}
-        - VITE_LLM_TEMPERATURE=${VITE_LLM_TEMPERATURE:-0.2}
-        - VITE_LLM_MAX_TOKENS=${VITE_LLM_MAX_TOKENS:-4096}
-        
-        # Google Gemini 配置
-        - VITE_GEMINI_API_KEY=${VITE_GEMINI_API_KEY}
-        - VITE_GEMINI_MODEL=${VITE_GEMINI_MODEL:-gemini-2.5-flash}
-        - VITE_GEMINI_TIMEOUT_MS=${VITE_GEMINI_TIMEOUT_MS:-25000}
-        
-        # OpenAI 配置
-        - VITE_OPENAI_API_KEY=${VITE_OPENAI_API_KEY}
-        - VITE_OPENAI_MODEL=${VITE_OPENAI_MODEL:-gpt-4o-mini}
-        - VITE_OPENAI_BASE_URL=${VITE_OPENAI_BASE_URL}
-        
-        # Claude 配置
-        - VITE_CLAUDE_API_KEY=${VITE_CLAUDE_API_KEY}
-        - VITE_CLAUDE_MODEL=${VITE_CLAUDE_MODEL:-claude-3-5-sonnet-20241022}
-        
-        # 通义千问配置
-        - VITE_QWEN_API_KEY=${VITE_QWEN_API_KEY}
-        - VITE_QWEN_MODEL=${VITE_QWEN_MODEL:-qwen-turbo}
-        
-        # DeepSeek 配置
-        - VITE_DEEPSEEK_API_KEY=${VITE_DEEPSEEK_API_KEY}
-        - VITE_DEEPSEEK_MODEL=${VITE_DEEPSEEK_MODEL:-deepseek-chat}
-        
-        # 智谱AI 配置
-        - VITE_ZHIPU_API_KEY=${VITE_ZHIPU_API_KEY}
-        - VITE_ZHIPU_MODEL=${VITE_ZHIPU_MODEL:-glm-4-flash}
-        
-        # Moonshot 配置
-        - VITE_MOONSHOT_API_KEY=${VITE_MOONSHOT_API_KEY}
-        - VITE_MOONSHOT_MODEL=${VITE_MOONSHOT_MODEL:-moonshot-v1-8k}
-        
-        # 百度文心一言配置
-        - VITE_BAIDU_API_KEY=${VITE_BAIDU_API_KEY}
-        - VITE_BAIDU_MODEL=${VITE_BAIDU_MODEL:-ERNIE-3.5-8K}
-        
-        # MiniMax 配置
-        - VITE_MINIMAX_API_KEY=${VITE_MINIMAX_API_KEY}
-        - VITE_MINIMAX_MODEL=${VITE_MINIMAX_MODEL:-abab6.5-chat}
-        
-        # 豆包配置
-        - VITE_DOUBAO_API_KEY=${VITE_DOUBAO_API_KEY}
-        - VITE_DOUBAO_MODEL=${VITE_DOUBAO_MODEL:-doubao-pro-32k}
-        
-        # Ollama 配置
-        - VITE_OLLAMA_API_KEY=${VITE_OLLAMA_API_KEY:-ollama}
-        - VITE_OLLAMA_MODEL=${VITE_OLLAMA_MODEL:-llama3}
-        - VITE_OLLAMA_BASE_URL=${VITE_OLLAMA_BASE_URL:-http://localhost:11434/v1}
-        
-        # 数据库配置
-        - VITE_USE_LOCAL_DB=${VITE_USE_LOCAL_DB:-true}
-        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-        - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
-        
-        # GitHub 配置
-        - VITE_GITHUB_TOKEN=${VITE_GITHUB_TOKEN}
-        
-        # 应用配置
-        - VITE_APP_ID=${VITE_APP_ID:-xcodereviewer}
-        - VITE_MAX_ANALYZE_FILES=${VITE_MAX_ANALYZE_FILES:-40}
-        - VITE_LLM_CONCURRENCY=${VITE_LLM_CONCURRENCY:-2}
-        - VITE_LLM_GAP_MS=${VITE_LLM_GAP_MS:-500}
-        - VITE_OUTPUT_LANGUAGE=${VITE_OUTPUT_LANGUAGE:-zh-CN}
-    
-    container_name: xcodereviewer-app
-    ports:
-      - "5174:80"
+  # =============================================
+  # 核心基础服务
+  # =============================================
+
+  db:
+    image: postgres:15-alpine
     restart: unless-stopped
-    networks:
-      - xcodereviewer-network
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=deepaudit
+    ports:
+      - "5432:5432"
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - deepaudit-network
+
+  backend:
+    build:
+      context: ./backend
+      args:
+        - http_proxy=
+        - https_proxy=
+        - HTTP_PROXY=
+        - HTTPS_PROXY=
+        - all_proxy=
+        - ALL_PROXY=
+    restart: unless-stopped
+    volumes:
+      - ./backend/app:/app/app:ro  # 挂载代码目录，修改后自动生效
+      - backend_uploads:/app/uploads
+      - /var/run/docker.sock:/var/run/docker.sock  # 沙箱执行必须
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/deepaudit
+      - REDIS_URL=redis://redis:6379/0
+      - AGENT_ENABLED=true
+      - SANDBOX_ENABLED=true
+      # 禁用代理设置，防止容器内无法连接外部 API
+      - HTTP_PROXY=
+      - HTTPS_PROXY=
+      - http_proxy=
+      - https_proxy=
+      - NO_PROXY=*
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # 开发模式：启用 --reload 热重载
+    command: sh -c ".venv/bin/alembic upgrade head && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    networks:
+      - deepaudit-network
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - http_proxy=
+        - https_proxy=
+        - HTTP_PROXY=
+        - HTTPS_PROXY=
+        - all_proxy=
+        - ALL_PROXY=
+    restart: unless-stopped
+    ports:
+      - "3000:80"  # Nginx 监听 80 端口
+    depends_on:
+      - backend
+    networks:
+      - deepaudit-network
+
+  # =============================================
+  # Agent 服务必须组件
+  # =============================================
+
+  # Redis (Agent 任务队列 - 必须)
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - deepaudit-network
+
+  # 沙箱镜像构建服务 (漏洞验证必须)
+  # 注意: 此服务仅用于构建镜像，不会持续运行
+  sandbox:
+    build:
+      context: ./docker/sandbox
+      dockerfile: Dockerfile
+    image: deepaudit/sandbox:latest
+    profiles:
+      - build-only
+    command: echo "Sandbox image built successfully"
 
 networks:
-  xcodereviewer-network:
+  deepaudit-network:
     driver: bridge
+
+volumes:
+  postgres_data:
+  backend_uploads:
+  redis_data:
