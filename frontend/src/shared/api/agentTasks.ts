@@ -55,6 +55,7 @@ export interface AgentTask {
   verification_level: string | null;
   exclude_patterns: string[] | null;
   target_files: string[] | null;
+  design_doc_path: string | null;
 
   // 错误信息
   error_message: string | null;
@@ -113,6 +114,7 @@ export interface CreateAgentTaskRequest {
   branch_name?: string;
   exclude_patterns?: string[];
   target_files?: string[];
+  design_doc_path?: string;
   max_iterations?: number;
   token_budget?: number;
   timeout_seconds?: number;

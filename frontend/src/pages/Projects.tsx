@@ -69,7 +69,8 @@ export default function Projects() {
     repository_url: "",
     repository_type: "github",
     default_branch: "main",
-    programming_languages: []
+    programming_languages: [],
+    design_doc_path: ""
   });
   const [createForm, setCreateForm] = useState<CreateProjectForm>({
     name: "",
@@ -78,7 +79,8 @@ export default function Projects() {
     repository_url: "",
     repository_type: "github",
     default_branch: "main",
-    programming_languages: []
+    programming_languages: [],
+    design_doc_path: ""
   });
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -173,7 +175,8 @@ export default function Projects() {
       repository_url: "",
       repository_type: "github",
       default_branch: "main",
-      programming_languages: []
+      programming_languages: [],
+      design_doc_path: ""
     });
     setSelectedFile(null);
     if (fileInputRef.current) {
@@ -297,7 +300,8 @@ export default function Projects() {
       repository_url: project.repository_url || "",
       repository_type: project.repository_type || "github",
       default_branch: project.default_branch || "main",
-      programming_languages: project.programming_languages ? JSON.parse(project.programming_languages) : []
+      programming_languages: project.programming_languages ? JSON.parse(project.programming_languages) : [],
+      design_doc_path: project.design_doc_path || ""
     });
     setEditZipFile(null);
     setEditZipInfo(null);
@@ -551,6 +555,25 @@ export default function Projects() {
                   </div>
                 </div>
 
+                {/* 🔥 设计文档路径 */}
+                <div className="p-3 border border-dashed border-slate-200 rounded bg-slate-50 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-slate-500" />
+                    <span className="font-mono text-xs uppercase font-bold text-slate-500">
+                      设计文档路径 (可选)
+                    </span>
+                  </div>
+                  <Input
+                    placeholder="e.g., docs/design.md or design.txt"
+                    value={createForm.design_doc_path || ""}
+                    onChange={(e) => setCreateForm({ ...createForm, design_doc_path: e.target.value })}
+                    className="h-8 text-sm font-mono border-slate-200 focus:ring-primary/20"
+                  />
+                  <p className="text-xs text-slate-500 font-mono">
+                    相对于项目根目录。支持 .md, .markdown, .txt 文件
+                  </p>
+                </div>
+
                 <div className="flex justify-end space-x-4 pt-4 border-t border-slate-100">
                   <Button variant="ghost" onClick={() => setShowCreateDialog(false)} className="text-slate-500 hover:text-slate-700">
                     取消
@@ -615,6 +638,25 @@ export default function Projects() {
                       </label>
                     ))}
                   </div>
+                </div>
+
+                {/* 🔥 设计文档路径 */}
+                <div className="p-3 border border-dashed border-border rounded bg-muted/50 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-muted-foreground" />
+                    <span className="font-mono text-xs uppercase font-bold text-muted-foreground">
+                      设计文档路径 (可选)
+                    </span>
+                  </div>
+                  <Input
+                    placeholder="e.g., docs/design.md or design.txt"
+                    value={createForm.design_doc_path || ""}
+                    onChange={(e) => setCreateForm({ ...createForm, design_doc_path: e.target.value })}
+                    className="h-8 cyber-input text-sm font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground font-mono">
+                    相对于项目根目录。支持 .md, .markdown, .txt 文件
+                  </p>
                 </div>
 
                 <div className="space-y-4">
@@ -1103,6 +1145,31 @@ export default function Projects() {
                     <span className="text-sm font-medium">{lang}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* 🔥 设计文档路径 */}
+            <div className="space-y-4">
+              <h3 className="font-mono font-bold uppercase text-sm text-muted-foreground border-b border-border pb-2 flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                设计文档配置
+              </h3>
+              <div className="p-3 border border-dashed border-border rounded bg-muted/50 space-y-2">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-mono text-xs uppercase font-bold text-muted-foreground">
+                    设计文档路径 (可选)
+                  </span>
+                </div>
+                <Input
+                  placeholder="e.g., docs/design.md or design.txt"
+                  value={editForm.design_doc_path || ""}
+                  onChange={(e) => setEditForm({ ...editForm, design_doc_path: e.target.value })}
+                  className="h-8 cyber-input text-sm font-mono"
+                />
+                <p className="text-xs text-muted-foreground font-mono">
+                  相对于项目根目录。支持 .md, .markdown, .txt 文件。在启动审计任务时，Agent 将参考此文档检查代码实现是否符合设计要求。
+                </p>
               </div>
             </div>
           </div>

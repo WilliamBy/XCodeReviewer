@@ -39,6 +39,7 @@ import {
   Play,
   Upload,
   FolderOpen,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/shared/config/database";
@@ -77,6 +78,7 @@ export default function CreateAgentTaskDialog({
   const [branches, setBranches] = useState<string[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [excludePatterns, setExcludePatterns] = useState(DEFAULT_EXCLUDES);
+  const [designDocPath, setDesignDocPath] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [creating, setCreating] = useState(false);
 
@@ -95,6 +97,7 @@ export default function CreateAgentTaskDialog({
   useEffect(() => {
     if (open) {
       setLoadingProjects(true);
+      setDesignDocPath("");  // 🔥 重置设计文档路径
       api.getProjects()
         .then((data) => {
           setProjects(data.filter((p: Project) => p.is_active));
@@ -109,6 +112,7 @@ export default function CreateAgentTaskDialog({
       setSearchTerm("");
       setBranch("main");
       setExcludePatterns(DEFAULT_EXCLUDES);
+      setDesignDocPath("");
       setShowAdvanced(false);
       setZipFile(null);
       setStoredZipInfo(null);
@@ -169,6 +173,15 @@ export default function CreateAgentTaskDialog({
     loadZipInfo();
   }, [selectedProject?.id]);
 
+  // 🔥 当选择项目时，预填充设计文档路径
+  useEffect(() => {
+    if (selectedProject?.design_doc_path) {
+      setDesignDocPath(selectedProject.design_doc_path);
+    } else {
+      setDesignDocPath("");
+    }
+  }, [selectedProject?.id, selectedProject?.design_doc_path]);
+
   // 过滤项目
   const filteredProjects = useMemo(() => {
     if (!searchTerm) return projects;
@@ -201,6 +214,7 @@ export default function CreateAgentTaskDialog({
         branch_name: isRepositoryProject(selectedProject) ? branch : undefined,
         exclude_patterns: excludePatterns,
         target_files: selectedFiles,
+        design_doc_path: designDocPath.trim() || selectedProject.design_doc_path || undefined,  // 🔥 优先使用输入值，否则使用项目默认值
         verification_level: "sandbox",
       });
 
@@ -504,6 +518,32 @@ export default function CreateAgentTaskDialog({
                         }}
                       />
                     </div>
+                  </div>
+
+                  {/* 设计文档路径 */}
+                  <div className="p-3 border border-dashed border-border rounded bg-muted/50 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-mono text-xs uppercase font-bold text-muted-foreground">
+                        Design Document Path (Optional)
+                      </span>
+                      {selectedProject?.design_doc_path && (
+                        <Badge className="ml-auto text-xs cyber-badge-info">
+                          项目默认: {selectedProject.design_doc_path}
+                        </Badge>
+                      )}
+                    </div>
+                    <Input
+                      placeholder={selectedProject?.design_doc_path || "e.g., docs/design.md or design.txt"}
+                      value={designDocPath}
+                      onChange={(e) => setDesignDocPath(e.target.value)}
+                      className="h-8 cyber-input text-sm font-mono"
+                    />
+                    <p className="text-xs text-muted-foreground font-mono">
+                      {selectedProject?.design_doc_path 
+                        ? "已预填充项目配置的设计文档路径，可修改或留空使用项目默认值"
+                        : "相对于项目根目录。支持 .md, .markdown, .txt 文件。Agent 将参考此文档检查代码实现是否符合设计要求。"}
+                    </p>
                   </div>
                 </CollapsibleContent>
               </Collapsible>

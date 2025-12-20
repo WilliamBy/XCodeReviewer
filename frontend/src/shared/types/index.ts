@@ -36,6 +36,7 @@ export interface Project {
   repository_type?: RepositoryPlatform;  // 仓库平台: github, gitlab, other
   default_branch: string;
   programming_languages: string;
+  design_doc_path?: string;  // 🔥 设计文档路径（相对于项目根目录）
   owner_id: string;
   is_active: boolean;
   created_at: string;
@@ -120,6 +121,7 @@ export interface CreateProjectForm {
   repository_type?: RepositoryPlatform;  // 仓库平台
   default_branch?: string;
   programming_languages: string[];
+  design_doc_path?: string;  // 🔥 设计文档路径（相对于项目根目录）
 }
 
 export interface CreateAuditTaskForm {

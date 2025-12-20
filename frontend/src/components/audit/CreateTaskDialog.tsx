@@ -219,6 +219,7 @@ export default function CreateTaskDialog({
           branch_name: isRepositoryProject(selectedProject) ? branch : undefined,
           exclude_patterns: excludePatterns,
           target_files: selectedFiles,
+          design_doc_path: selectedProject.design_doc_path || undefined,  // 🔥 使用项目的设计文档路径
           verification_level: "sandbox",
         });
 
