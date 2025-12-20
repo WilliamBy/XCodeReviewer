@@ -187,11 +187,42 @@ Final Answer: [JSON 格式的漏洞报告]
 - 硬编码密钥 (password, secret, api_key)
 - 不安全的反序列化 (pickle, yaml.load, eval)
 
+## 📋 设计文档检查要求（如果提供了项目设计文档）
+
+如果提供了项目设计文档，你需要**同时进行**以下检查：
+
+1. **功能完整性检查**：检查代码是否实现了设计文档中描述的所有功能
+2. **接口一致性检查**：验证 API 接口是否符合设计文档的规范（请求/响应格式、参数验证等）
+3. **设计约束检查**：检查代码是否违反了设计文档中的约束条件（安全要求、性能要求、架构约束等）
+4. **业务逻辑一致性**：验证业务逻辑实现是否符合设计文档的描述
+
+### 设计文档检查流程
+1. 首先理解设计文档中的功能定义、接口规范和约束条件
+2. 在分析代码时，对比实现与设计文档
+3. 发现不一致时，记录为"design_inconsistency"类型的发现，严重程度根据影响范围确定
+4. 对于缺失的功能，记录为"missing_feature"类型的发现
+5. 对于接口不匹配，记录为"interface_mismatch"类型的发现
+
+### 设计不一致发现格式
+```json
+{
+    "vulnerability_type": "design_inconsistency|missing_feature|interface_mismatch",
+    "severity": "high|medium|low",
+    "title": "设计与实现不一致：功能缺失/接口不匹配/违反约束",
+    "description": "详细说明不一致之处，引用设计文档中的具体要求",
+    "file_path": "相关代码文件",
+    "line_start": 行号,
+    "code_snippet": "相关代码片段",
+    "suggestion": "如何修复以符合设计文档要求"
+}
+```
+
 ## 重要原则
 1. **外部工具优先** - 首先使用 semgrep、bandit 等专业工具
 2. **质量优先** - 宁可深入分析几个真实漏洞，不要浅尝辄止报告大量误报
 3. **上下文分析** - 看到可疑代码要读取上下文，理解完整逻辑
 4. **自主判断** - 不要机械相信工具输出，要用你的专业知识判断
+5. **设计一致性** - 如果提供了设计文档，必须同时检查代码是否符合设计要求
 
 现在开始你的安全分析！首先使用外部工具进行全面扫描。"""
 
@@ -385,7 +416,68 @@ class AnalysisAgent(BaseAgent):
 
 ### 初步发现 (如果有)
 {json.dumps(initial_findings[:5], ensure_ascii=False, indent=2) if initial_findings else "无"}'''}
+"""
+        
+        # 🔥 添加设计文档信息（如果提供）
+        design_doc = project_info.get("design_document")
+        if design_doc and not design_doc.get("error"):
+            initial_message += f"""
+## 📄 项目设计文档
 
+设计文档已提供，请在进行安全分析的同时，检查代码实现是否符合设计文档的要求。
+
+### 设计文档摘要
+{design_doc.get('summary', '无摘要')[:500]}
+
+"""
+            # 添加功能定义
+            functions = design_doc.get('functions', [])
+            if functions:
+                initial_message += f"""### 关键功能定义（共 {len(functions)} 个）
+"""
+                for i, func in enumerate(functions[:10], 1):
+                    func_name = func.get('name', f'功能 {i}')
+                    func_desc = func.get('description', '')[:100]
+                    initial_message += f"{i}. **{func_name}**: {func_desc}\n"
+                if len(functions) > 10:
+                    initial_message += f"... 还有 {len(functions) - 10} 个功能\n"
+                initial_message += "\n"
+            
+            # 添加接口规范
+            interfaces = design_doc.get('interfaces', [])
+            if interfaces:
+                initial_message += f"""### 接口规范（共 {len(interfaces)} 个）
+"""
+                for i, iface in enumerate(interfaces[:10], 1):
+                    iface_desc = iface.get('description', '')[:100]
+                    initial_message += f"{i}. {iface_desc}\n"
+                if len(interfaces) > 10:
+                    initial_message += f"... 还有 {len(interfaces) - 10} 个接口\n"
+                initial_message += "\n"
+            
+            # 添加设计约束
+            constraints = design_doc.get('constraints', [])
+            if constraints:
+                initial_message += f"""### 设计约束（共 {len(constraints)} 个）
+"""
+                for i, constraint in enumerate(constraints[:10], 1):
+                    constraint_desc = constraint.get('description', '')[:100]
+                    initial_message += f"{i}. {constraint_desc}\n"
+                if len(constraints) > 10:
+                    initial_message += f"... 还有 {len(constraints) - 10} 个约束\n"
+                initial_message += "\n"
+            
+            initial_message += """**重要**: 在分析代码时，请同时检查：
+1. 代码是否实现了设计文档中描述的所有功能
+2. API 接口是否符合设计规范
+3. 是否违反了设计约束
+4. 业务逻辑是否与设计文档一致
+
+如果发现设计与实现不一致，请将其记录为发现项，类型为 "design_inconsistency"、"missing_feature" 或 "interface_mismatch"。
+
+"""
+        
+        initial_message += f"""
 ## 任务
 {task_context or task or '进行全面的安全漏洞分析，发现代码中的安全问题。'}
 

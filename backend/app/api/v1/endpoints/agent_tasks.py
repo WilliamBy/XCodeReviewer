@@ -74,6 +74,9 @@ class AgentTaskCreate(BaseModel):
     # 文件范围
     target_files: Optional[List[str]] = Field(None, description="指定扫描的文件")
     
+    # 设计文档路径
+    design_doc_path: Optional[str] = Field(None, description="设计文档路径（相对于项目根目录）")
+    
     # Agent 配置
     max_iterations: int = Field(50, ge=1, le=200, description="最大迭代次数")
     timeout_seconds: int = Field(1800, ge=60, le=7200, description="超时时间（秒）")
@@ -132,6 +135,7 @@ class AgentTaskResponse(BaseModel):
     verification_level: Optional[str] = None
     exclude_patterns: Optional[List[str]] = None
     target_files: Optional[List[str]] = None
+    design_doc_path: Optional[str] = None
     
     # 错误信息
     error_message: Optional[str] = None
@@ -311,10 +315,20 @@ async def _execute_agent_task(task_id: str):
                 tools=tools.get("recon", {}),
                 event_emitter=event_emitter,
             )
+
+            # 🔥 为 Analysis Agent 添加设计文档工具（如果指定了设计文档）
+            analysis_tools_dict = tools.get("analysis", {}).copy()
+            if task.design_doc_path:
+                from app.services.agent.tools.design_doc_tool import ReadDesignDocTool
+                analysis_tools_dict["read_design_doc"] = ReadDesignDocTool(
+                    project_root=project_root,
+                    design_doc_path=task.design_doc_path,
+                    llm_service=llm_service,
+                )
             
             analysis_agent = AnalysisAgent(
                 llm_service=llm_service,
-                tools=tools.get("analysis", {}),
+                tools=analysis_tools_dict,
                 event_emitter=event_emitter,
             )
             
@@ -351,12 +365,14 @@ async def _execute_agent_task(task_id: str):
             await event_emitter.emit_info("🧠 动态 Agent 树架构启动")
             await event_emitter.emit_info(f"📁 项目路径: {project_root}")
             
-            # 收集项目信息 - 传递排除模式和目标文件
+            # 收集项目信息 - 传递排除模式和目标文件，以及 LLM 服务用于文档解析
             project_info = await _collect_project_info(
                 project_root, 
                 project.name,
                 exclude_patterns=task.exclude_patterns,
                 target_files=task.target_files,
+                design_doc_path=task.design_doc_path,
+                llm_service=llm_service,  # 🔥 传递 LLM 服务用于增强文档解析
             )
             
             # 更新任务文件统计
@@ -718,6 +734,10 @@ async def _initialize_tools(
     else:
         logger.warning("⚠️ RAG 未初始化，rag_query/security_search/function_context 工具不可用")
     
+    # 🔥 注册设计文档读取工具到 Analysis Agent
+    # 需要从任务配置中获取 design_doc_path，这里先不注册，在创建 Agent 时传递
+    # 设计文档工具将在创建 Analysis Agent 时动态添加
+    
     # Verification 工具
     # 🔥 导入沙箱工具
     from app.services.agent.tools import (
@@ -780,6 +800,8 @@ async def _collect_project_info(
     project_name: str,
     exclude_patterns: Optional[List[str]] = None,
     target_files: Optional[List[str]] = None,
+    design_doc_path: Optional[str] = None,
+    llm_service=None,  # 🔥 新增：LLM 服务用于增强文档解析
 ) -> Dict[str, Any]:
     """收集项目信息
     
@@ -889,6 +911,27 @@ async def _collect_project_info(
     except Exception as e:
         logger.warning(f"Failed to collect project info: {e}")
     
+    # 🔥 Load design document if specified (with LLM-enhanced parsing)
+    if design_doc_path:
+        try:
+            from app.services.design_doc.reader import load_design_document
+            design_doc_info = await load_design_document(
+                project_root, 
+                design_doc_path,
+                llm_service=llm_service,  # 🔥 传递 LLM 服务用于增强解析
+                use_llm_parsing=True,  # 🔥 启用 LLM 增强解析
+            )
+            if design_doc_info:
+                info["design_document"] = design_doc_info
+                parsing_method = design_doc_info.get("parsing_method", "basic")
+                logger.info(f"✅ Loaded design document: {design_doc_path} (parsing: {parsing_method})")
+            else:
+                logger.warning(f"⚠️ Failed to load design document: {design_doc_path}")
+                info["design_document"] = {"error": "Failed to load design document"}
+        except Exception as e:
+            logger.error(f"Error loading design document: {e}", exc_info=True)
+            info["design_document"] = {"error": str(e)}
+    
     return info
 
 
@@ -934,6 +977,9 @@ async def _save_findings(db: AsyncSession, task_id: str, findings: List[Dict]) -
         "race_condition": VulnerabilityType.RACE_CONDITION,
         "business_logic": VulnerabilityType.BUSINESS_LOGIC,
         "memory_corruption": VulnerabilityType.MEMORY_CORRUPTION,
+        "design_inconsistency": VulnerabilityType.DESIGN_INCONSISTENCY,
+        "missing_feature": VulnerabilityType.MISSING_FEATURE,
+        "interface_mismatch": VulnerabilityType.INTERFACE_MISMATCH,
     }
 
     saved_count = 0
@@ -1265,6 +1311,7 @@ async def create_agent_task(
         branch_name=request.branch_name,  # 保存用户选择的分支
         exclude_patterns=request.exclude_patterns,
         target_files=request.target_files,
+        design_doc_path=request.design_doc_path,  # 🔥 保存设计文档路径
         max_iterations=request.max_iterations or 50,
         timeout_seconds=request.timeout_seconds or 1800,
         created_by=current_user.id,
@@ -1414,6 +1461,7 @@ async def get_agent_task(
             "verification_level": task.verification_level,
             "exclude_patterns": task.exclude_patterns,
             "target_files": task.target_files,
+            "design_doc_path": task.design_doc_path,
         }
         
         return AgentTaskResponse(**response_data)
@@ -2649,6 +2697,106 @@ async def generate_audit_report(
     if with_poc > 0:
         md_lines.append(f"- **生成的 PoC:** {with_poc}")
     md_lines.append("")
+    
+    # 🔥 Design Document Compliance Section
+    if task.design_doc_path:
+        md_lines.append("## 设计文档遵循情况")
+        md_lines.append("")
+        md_lines.append(f"**设计文档路径:** `{task.design_doc_path}`")
+        md_lines.append("")
+        
+        # 统计设计相关的发现
+        design_findings = [
+            f for f in findings 
+            if f.vulnerability_type in ['design_inconsistency', 'missing_feature', 'interface_mismatch']
+        ]
+        
+        if design_findings:
+            md_lines.append(f"### 设计遵循情况概览")
+            md_lines.append("")
+            md_lines.append(f"本次审计发现 **{len(design_findings)}** 个设计与实现不一致的问题：")
+            md_lines.append("")
+            
+            # 按类型分组统计
+            inconsistency_count = sum(1 for f in design_findings if f.vulnerability_type == 'design_inconsistency')
+            missing_feature_count = sum(1 for f in design_findings if f.vulnerability_type == 'missing_feature')
+            interface_mismatch_count = sum(1 for f in design_findings if f.vulnerability_type == 'interface_mismatch')
+            
+            md_lines.append(f"| 问题类型 | 数量 |")
+            md_lines.append(f"|----------|------|")
+            if inconsistency_count > 0:
+                md_lines.append(f"| **设计与实现不一致** | {inconsistency_count} |")
+            if missing_feature_count > 0:
+                md_lines.append(f"| **功能缺失** | {missing_feature_count} |")
+            if interface_mismatch_count > 0:
+                md_lines.append(f"| **接口不匹配** | {interface_mismatch_count} |")
+            md_lines.append("")
+            
+            # 详细列出设计相关问题
+            md_lines.append("### 设计遵循问题详情")
+            md_lines.append("")
+            
+            for i, f in enumerate(design_findings, 1):
+                type_label = {
+                    'design_inconsistency': '设计与实现不一致',
+                    'missing_feature': '功能缺失',
+                    'interface_mismatch': '接口不匹配',
+                }.get(f.vulnerability_type, f.vulnerability_type)
+                
+                md_lines.append(f"#### {i}. {f.title}")
+                md_lines.append("")
+                md_lines.append(f"**类型:** {type_label} | **严重程度:** {f.severity.upper()}")
+                md_lines.append("")
+                
+                if f.file_path:
+                    location = f"`{f.file_path}"
+                    if f.line_start:
+                        location += f":{f.line_start}"
+                        if f.line_end and f.line_end != f.line_start:
+                            location += f"-{f.line_end}"
+                    location += "`"
+                    md_lines.append(f"**位置:** {location}")
+                    md_lines.append("")
+                
+                if f.description:
+                    md_lines.append("**问题描述:**")
+                    md_lines.append("")
+                    md_lines.append(f.description)
+                    md_lines.append("")
+                
+                if f.code_snippet:
+                    lang = "text"
+                    if f.file_path:
+                        ext = f.file_path.split('.')[-1].lower()
+                        lang_map = {
+                            'py': 'python', 'js': 'javascript', 'ts': 'typescript',
+                            'jsx': 'jsx', 'tsx': 'tsx', 'java': 'java', 'go': 'go',
+                            'rs': 'rust', 'rb': 'ruby', 'php': 'php', 'c': 'c',
+                            'cpp': 'cpp', 'cs': 'csharp', 'sol': 'solidity'
+                        }
+                        lang = lang_map.get(ext, 'text')
+                    md_lines.append("**相关代码:**")
+                    md_lines.append("")
+                    md_lines.append(f"```{lang}")
+                    md_lines.append(f.code_snippet.strip())
+                    md_lines.append("```")
+                    md_lines.append("")
+                
+                if f.suggestion:
+                    md_lines.append("**修复建议:**")
+                    md_lines.append("")
+                    md_lines.append(f.suggestion)
+                    md_lines.append("")
+                
+                md_lines.append("---")
+                md_lines.append("")
+        else:
+            md_lines.append("✅ **设计遵循情况良好**")
+            md_lines.append("")
+            md_lines.append("本次审计未发现设计与实现不一致的问题，代码实现符合设计文档要求。")
+            md_lines.append("")
+        
+        md_lines.append("")
 
     # Detailed Findings
     if not findings:

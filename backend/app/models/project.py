@@ -21,6 +21,9 @@ class Project(Base):
     
     programming_languages = Column(Text, default="[]")  # Stored as JSON string
     
+    # 🔥 设计文档路径（相对于项目根目录）
+    design_doc_path = Column(String(500), nullable=True)
+    
     owner_id = Column(String, ForeignKey("users.id"), nullable=False)
     is_active = Column(Boolean(), default=True)
     

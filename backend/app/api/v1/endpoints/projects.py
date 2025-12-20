@@ -35,6 +35,7 @@ class ProjectCreate(BaseModel):
     description: Optional[str] = None
     default_branch: Optional[str] = "main"
     programming_languages: Optional[List[str]] = None
+    design_doc_path: Optional[str] = None  # 🔥 设计文档路径（相对于项目根目录）
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
@@ -44,6 +45,7 @@ class ProjectUpdate(BaseModel):
     description: Optional[str] = None
     default_branch: Optional[str] = None
     programming_languages: Optional[List[str]] = None
+    design_doc_path: Optional[str] = None  # 🔥 设计文档路径（相对于项目根目录）
 
 class OwnerSchema(BaseModel):
     id: str
@@ -64,6 +66,7 @@ class ProjectResponse(BaseModel):
     repository_type: Optional[str] = None  # github, gitlab, other
     default_branch: Optional[str] = None
     programming_languages: Optional[str] = None
+    design_doc_path: Optional[str] = None  # 🔥 设计文档路径（相对于项目根目录）
     owner_id: str
     is_active: bool
     created_at: datetime
@@ -103,6 +106,7 @@ async def create_project(
         description=project_in.description,
         default_branch=project_in.default_branch or "main",
         programming_languages=json.dumps(project_in.programming_languages or []),
+        design_doc_path=project_in.design_doc_path,  # 🔥 保存设计文档路径
         owner_id=current_user.id
     )
     db.add(project)

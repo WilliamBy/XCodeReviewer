@@ -71,6 +71,9 @@ class AgentTask(Base):
     # 文件范围
     target_files = Column(JSON, nullable=True)  # 指定扫描的文件列表
     
+    # 设计文档路径
+    design_doc_path = Column(String(500), nullable=True)  # 设计文档路径（相对于项目根目录）
+    
     # LLM 配置
     llm_config = Column(JSON, nullable=True)  # LLM 配置
     
@@ -306,6 +309,9 @@ class VulnerabilityType:
     RACE_CONDITION = "race_condition"
     BUSINESS_LOGIC = "business_logic"
     MEMORY_CORRUPTION = "memory_corruption"
+    DESIGN_INCONSISTENCY = "design_inconsistency"  # 设计不一致
+    MISSING_FEATURE = "missing_feature"  # 功能缺失
+    INTERFACE_MISMATCH = "interface_mismatch"  # 接口不匹配
     OTHER = "other"
 
 

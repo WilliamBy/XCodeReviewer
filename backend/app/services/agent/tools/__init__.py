@@ -82,6 +82,12 @@ from .smart_scan_tool import SmartScanTool, QuickAuditTool
 # 🔥 新增：Kunlun-M 静态代码分析工具 (MIT License)
 from .kunlun_tool import KunlunMTool, KunlunRuleListTool, KunlunPluginTool
 
+# 🔥 新增：通用代码执行工具 (LLM 驱动的 Fuzzing Harness)
+from .run_code import RunCodeTool, ExtractFunctionTool
+
+# 🔥 新增：设计文档读取工具
+from .design_doc_tool import ReadDesignDocTool
+
 __all__ = [
     # 基础
     "AgentTool",
@@ -164,4 +170,9 @@ __all__ = [
     "KunlunMTool",
     "KunlunRuleListTool",
     "KunlunPluginTool",
+
+    "ExtractFunctionTool",
+    
+    # 🔥 设计文档读取工具
+    "ReadDesignDocTool",
 ]
