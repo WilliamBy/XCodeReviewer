@@ -10,6 +10,9 @@ from app.services.llm.service import LLMService
 
 logger = logging.getLogger(__name__)
 
+# FIXME: 临时配置，用于测试
+PLACEHOLDER_CONFIG = {"llmConfig": {"llmProvider": "moonshot", "llmApiKey": "sk-LgsuY05nxGypMU2gyYjyh5MPI0ykvJY3WhUNdxxYHRphFSxM", "llmModel": "kimi-k2-0711-preview"}}
+
 class RuleUpdaterService:
     RULE_SET_NAME = "CVE漏洞模式"
     RULE_SET_DESC = "自动解析的CVE漏洞库模式，实时更新"
@@ -152,7 +155,8 @@ CVE详情页面内容:
 请分析以上CVE信息。**只有当包含具体代码细节时才提取**,否则返回空JSON {{}}。"""
 
             # 3. 调用LLM服务
-            llm_service = LLMService()
+            global PLACEHOLDER_CONFIG
+            llm_service = LLMService(PLACEHOLDER_CONFIG)
             response = await llm_service.chat_completion_raw(
                 messages=[
                     {"role": "system", "content": system_prompt},
