@@ -41,6 +41,7 @@ import {
   Loader2,
   Zap,
   Bot,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/shared/config/database";
@@ -97,6 +98,8 @@ export default function CreateTaskDialog({
   const [showFileSelection, setShowFileSelection] = useState(false);
   const [creating, setCreating] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [selectedDesignDocPath, setSelectedDesignDocPath] = useState<string | undefined>();
+  const [showDesignDocSelection, setShowDesignDocSelection] = useState(false);
 
   const [auditMode, setAuditMode] = useState<AuditMode>("agent");
 
@@ -190,8 +193,18 @@ export default function CreateTaskDialog({
       const defaultPrompt = promptTemplates.find(p => p.is_default);
       setSelectedPromptTemplateId(defaultPrompt?.id || promptTemplates[0]?.id || "");
       zipState.reset();
+      setSelectedDesignDocPath(undefined);
     }
   }, [open, preselectedProjectId, ruleSets, promptTemplates]);
+
+  // Reset design doc path when project changes
+  useEffect(() => {
+    if (selectedProject) {
+      setSelectedDesignDocPath(selectedProject.design_doc_path || undefined);
+    } else {
+      setSelectedDesignDocPath(undefined);
+    }
+  }, [selectedProject?.id]);
 
   const excludePatternsRef = useRef(excludePatterns);
   useEffect(() => {
@@ -210,16 +223,37 @@ export default function CreateTaskDialog({
 
     try {
       setCreating(true);
+      
+      // Update project's design_doc_path if a new one was selected
+      if (selectedDesignDocPath !== undefined && selectedDesignDocPath !== selectedProject.design_doc_path) {
+        try {
+          await api.updateProject(selectedProject.id, { 
+            design_doc_path: selectedDesignDocPath || undefined 
+          });
+          // Refresh project data to get updated design_doc_path
+          await loadProjects();
+        } catch (error) {
+          console.error('Failed to update design doc path:', error);
+          // Continue anyway, backend will use project's existing design_doc_path
+        }
+      }
+      
       let taskId: string;
 
       if (auditMode === "agent") {
+        // Use selected design doc path if specified, otherwise use project's default
+        // Note: project's design_doc_path should already be updated above
+        const designDocPath = selectedDesignDocPath !== undefined 
+          ? selectedDesignDocPath 
+          : selectedProject.design_doc_path || undefined;
+        
         const agentTask = await createAgentTask({
           project_id: selectedProject.id,
           name: `Agent审计-${selectedProject.name}`,
           branch_name: isRepositoryProject(selectedProject) ? branch : undefined,
           exclude_patterns: excludePatterns,
           target_files: selectedFiles,
-          design_doc_path: selectedProject.design_doc_path || undefined,  // 🔥 使用项目的设计文档路径
+          design_doc_path: designDocPath,  // 🔥 使用选择的设计文档路径
           verification_level: "sandbox",
         });
 
@@ -603,6 +637,70 @@ export default function CreateTaskDialog({
                         </div>
                       );
                     })()}
+
+                    {/* 设计文档选择 */}
+                    {(() => {
+                      const isRepo = isRepositoryProject(selectedProject);
+                      const isZip = isZipProject(selectedProject);
+                      const hasStoredZip = zipState.storedZipInfo?.has_file;
+                      const useStored = zipState.useStoredZip;
+                      const canSelectDesignDoc = isRepo || (isZip && useStored && hasStoredZip);
+
+                      return (
+                        <div className="flex items-center justify-between p-3 border border-dashed border-blue-300 rounded-lg bg-blue-50/50">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <FileText className="w-4 h-4 text-blue-600" />
+                              <p className="text-xs uppercase font-bold text-blue-700">
+                                指定参考设计文档
+                              </p>
+                            </div>
+                            <p className="text-sm font-semibold text-slate-800 mt-1 truncate">
+                              {selectedDesignDocPath
+                                ? selectedDesignDocPath
+                                : selectedProject.design_doc_path
+                                ? `项目默认: ${selectedProject.design_doc_path}`
+                                : "未指定（将不使用设计文档）"}
+                            </p>
+                            {selectedDesignDocPath && (
+                              <p className="text-xs text-blue-600 mt-1">
+                                本次审计将使用此设计文档进行一致性检查
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            {selectedDesignDocPath && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setSelectedDesignDocPath(undefined);
+                                  // Update project's design_doc_path to empty
+                                  if (selectedProject) {
+                                    api.updateProject(selectedProject.id, { design_doc_path: undefined }).catch(() => {
+                                      // Silent fail, just reset local state
+                                    });
+                                  }
+                                }}
+                                className="h-8 text-xs text-rose-500 hover:bg-rose-50 hover:text-rose-600"
+                              >
+                                清除
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setShowDesignDocSelection(true)}
+                              disabled={!canSelectDesignDoc}
+                              className="h-8 text-xs font-semibold disabled:opacity-50 border-blue-200 bg-white hover:bg-blue-50"
+                            >
+                              <FileText className="w-3 h-3 mr-1" />
+                              选择文档
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </CollapsibleContent>
                 </Collapsible>
               </div>
@@ -652,6 +750,25 @@ export default function CreateTaskDialog({
         branch={branch}
         excludePatterns={excludePatterns}
         onConfirm={setSelectedFiles}
+      />
+
+      {/* 设计文档选择对话框 - 只允许选择单个文件 */}
+      <FileSelectionDialog
+        open={showDesignDocSelection}
+        onOpenChange={setShowDesignDocSelection}
+        projectId={selectedProjectId}
+        branch={branch}
+        excludePatterns={excludePatterns}
+        onConfirm={(files) => {
+          if (files.length > 0) {
+            const designDocPath = files[0]; // 只取第一个文件
+            setSelectedDesignDocPath(designDocPath);
+            toast.success("设计文档已选择，将在启动审计时更新项目配置");
+          } else {
+            setSelectedDesignDocPath(undefined);
+          }
+          setShowDesignDocSelection(false);
+        }}
       />
     </>
   );

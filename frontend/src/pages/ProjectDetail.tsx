@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   ArrowLeft,
   Edit,
@@ -59,7 +60,8 @@ export default function ProjectDetail() {
     repository_url: "",
     repository_type: "github",
     default_branch: "main",
-    programming_languages: []
+    programming_languages: [],
+    design_doc_path: ""
   });
   const [activeTab, setActiveTab] = useState("overview");
   const [latestIssues, setLatestIssues] = useState<any[]>([]);
@@ -67,6 +69,9 @@ export default function ProjectDetail() {
 
   const [showFileSelectionDialog, setShowFileSelectionDialog] = useState(false);
   const [showAuditOptionsDialog, setShowAuditOptionsDialog] = useState(false);
+  const [hasZipFile, setHasZipFile] = useState(false);
+  const [zipFileList, setZipFileList] = useState<Array<{ path: string; size: number }>>([]);
+  const [loadingZipFiles, setLoadingZipFiles] = useState(false);
 
   useEffect(() => {
     if (activeTab === 'issues' && tasks.length > 0) {
@@ -100,7 +105,8 @@ export default function ProjectDetail() {
       repository_url: project.repository_url || "",
       repository_type: project.repository_type || "github",
       default_branch: project.default_branch || "main",
-      programming_languages: project.programming_languages ? JSON.parse(project.programming_languages) : []
+      programming_languages: project.programming_languages ? JSON.parse(project.programming_languages) : [],
+      design_doc_path: project.design_doc_path || ""
     });
 
     setActiveTab("settings");
@@ -131,6 +137,39 @@ export default function ProjectDetail() {
       loadProjectData();
     }
   }, [id]);
+
+  // Check ZIP file and load file list for ZIP projects
+  useEffect(() => {
+    const checkZipFileAndLoadFiles = async () => {
+      if (!project || project.source_type !== 'zip' || !id) {
+        setHasZipFile(false);
+        setZipFileList([]);
+        return;
+      }
+
+      try {
+        setLoadingZipFiles(true);
+        const hasFile = await hasZipFile(id);
+        setHasZipFile(hasFile);
+
+        if (hasFile) {
+          // Load file list from ZIP
+          const files = await api.getProjectFiles(id, undefined, ['node_modules/**', '.git/**', 'dist/**', 'build/**']);
+          setZipFileList(files);
+        } else {
+          setZipFileList([]);
+        }
+      } catch (error) {
+        console.error('Failed to check ZIP file or load files:', error);
+        setHasZipFile(false);
+        setZipFileList([]);
+      } finally {
+        setLoadingZipFiles(false);
+      }
+    };
+
+    checkZipFileAndLoadFiles();
+  }, [project?.id, project?.source_type, id]);
 
   const loadProjectData = async () => {
     if (!id) return;
@@ -245,7 +284,12 @@ export default function ProjectDetail() {
     }
 
     try {
-      await api.updateProject(id, editForm);
+      // Prepare update data, convert empty string to undefined for optional fields
+      const updateData = {
+        ...editForm,
+        design_doc_path: editForm.design_doc_path?.trim() || undefined
+      };
+      await api.updateProject(id, updateData);
       toast.success("项目信息已保存");
       loadProjectData();
     } catch (error) {
@@ -825,6 +869,98 @@ export default function ProjectDetail() {
                       {lang}
                     </Badge>
                   ))}
+                </div>
+              </div>
+
+              {/* 设计文档路径 */}
+              <div className="space-y-4 border-t border-slate-100 pt-4">
+                <h3 className="font-bold text-sm text-slate-500 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  设计文档配置
+                </h3>
+
+                <div>
+                  <Label htmlFor="edit-design-doc-path" className="font-medium text-slate-700">
+                    设计文档路径 (可选)
+                  </Label>
+                  {hasZipFile && zipFileList.length > 0 ? (
+                    // ZIP项目：显示下拉选择框
+                    <Select
+                      value={editForm.design_doc_path || ""}
+                      onValueChange={(value) => setEditForm({ ...editForm, design_doc_path: value })}
+                    >
+                      <SelectTrigger id="edit-design-doc-path" className="mt-1 border-slate-200">
+                        <SelectValue placeholder="选择设计文档文件" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        <SelectItem value="">无（不选择设计文档）</SelectItem>
+                        {(() => {
+                          // 分离设计文档文件和其他文件
+                          const docFiles: Array<{ path: string; size: number }> = [];
+                          const otherFiles: Array<{ path: string; size: number }> = [];
+                          
+                          zipFileList.forEach(file => {
+                            const ext = file.path.split('.').pop()?.toLowerCase() || '';
+                            const docExts = ['md', 'txt', 'doc', 'docx', 'pdf', 'rst', 'adoc'];
+                            const pathLower = file.path.toLowerCase();
+                            const isDocFile = docExts.includes(ext) || 
+                                            pathLower.includes('design') || 
+                                            pathLower.includes('doc') ||
+                                            pathLower.includes('readme');
+                            
+                            if (isDocFile) {
+                              docFiles.push(file);
+                            } else {
+                              otherFiles.push(file);
+                            }
+                          });
+                          
+                          return (
+                            <>
+                              {/* 优先显示设计文档文件 */}
+                              {docFiles.length > 0 && (
+                                <>
+                                  {docFiles.map((file) => (
+                                    <SelectItem key={file.path} value={file.path}>
+                                      {file.path}
+                                    </SelectItem>
+                                  ))}
+                                  {otherFiles.length > 0 && (
+                                    <div className="px-2 py-1 text-xs text-slate-500 border-t border-slate-200 mt-1">
+                                      其他文件
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                              {/* 显示其他文件 */}
+                              {otherFiles.map((file) => (
+                                <SelectItem key={file.path} value={file.path}>
+                                  {file.path}
+                                </SelectItem>
+                              ))}
+                            </>
+                          );
+                        })()}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    // 非ZIP项目或没有ZIP文件：显示输入框
+                    <Input
+                      id="edit-design-doc-path"
+                      value={editForm.design_doc_path || ""}
+                      onChange={(e) => setEditForm({ ...editForm, design_doc_path: e.target.value })}
+                      placeholder="e.g., docs/design.md or design.txt"
+                      className="mt-1 border-slate-200 focus:ring-primary/20"
+                    />
+                  )}
+                  <p className="text-xs text-slate-500 mt-1">
+                    {hasZipFile && zipFileList.length > 0
+                      ? "从项目文件中选择设计文档，或留空表示不使用设计文档"
+                      : "相对于项目根目录的设计文档路径，用于代码审计时进行设计一致性检查"}
+                  </p>
+                  {loadingZipFiles && (
+                    <p className="text-xs text-slate-400 mt-1">正在加载文件列表...</p>
+                  )}
                 </div>
               </div>
 
