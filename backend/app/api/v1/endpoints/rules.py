@@ -109,6 +109,11 @@ async def list_rule_sets(
             for r in rs.rules
         ]
         
+        # 计算最新规则的创建时间
+        latest_rule_time = None
+        if rules:
+            latest_rule_time = max((r.created_at for r in rules if r.created_at), default=None)
+        
         items.append(AuditRuleSetResponse(
             id=rs.id,
             name=rs.name,
@@ -126,6 +131,7 @@ async def list_rule_sets(
             rules=rules,
             rules_count=len(rules),
             enabled_rules_count=len([r for r in rules if r.enabled]),
+            latest_rule_time=latest_rule_time,
         ))
     
     return AuditRuleSetListResponse(items=items, total=total)

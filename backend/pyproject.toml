@@ -84,6 +84,7 @@ dependencies = [
     "rarfile>=4.0",
     "beautifulsoup4>=4.12.0",
     "django>=4.2.0",
+    "apscheduler>=3.10.0",
 ]
 
 [project.optional-dependencies]

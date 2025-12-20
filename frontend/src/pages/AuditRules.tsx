@@ -349,6 +349,19 @@ export default function AuditRules() {
                         {ruleSet.name}
                         {ruleSet.is_system && <Badge variant="secondary" className="bg-blue-50 text-blue-600 border-blue-100">系统</Badge>}
                         {ruleSet.is_default && <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 border-emerald-100">默认</Badge>}
+                        {/* CVE规则集显示最近更新时间 */}
+                        {ruleSet.name === 'CVE漏洞模式' && ruleSet.latest_rule_time && (
+                          <span className="text-xs text-slate-500 font-normal flex items-center gap-1">
+                            <Activity className="w-3 h-3" />
+                            最近更新: {new Date(ruleSet.latest_rule_time).toLocaleString('zh-CN', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        )}
                       </h3>
                       <p className="text-sm text-slate-500">{ruleSet.description}</p>
                     </div>

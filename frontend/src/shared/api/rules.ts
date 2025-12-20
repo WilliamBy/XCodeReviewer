@@ -38,6 +38,7 @@ export interface AuditRuleSet {
   rules: AuditRule[];
   rules_count: number;
   enabled_rules_count: number;
+  latest_rule_time?: string;
 }
 
 export interface AuditRuleSetListResponse {
@@ -106,7 +107,7 @@ export async function getRuleSets(params?: {
   if (params?.language) searchParams.set('language', params.language);
   if (params?.rule_type) searchParams.set('rule_type', params.rule_type);
   if (params?.is_active !== undefined) searchParams.set('is_active', String(params.is_active));
-  
+
   const query = searchParams.toString();
   const response = await apiClient.get(`/rules${query ? `?${query}` : ''}`);
   return response.data;

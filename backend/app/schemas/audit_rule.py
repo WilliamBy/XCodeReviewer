@@ -97,6 +97,7 @@ class AuditRuleSetResponse(AuditRuleSetBase):
     rules: List[AuditRuleResponse] = Field(default_factory=list)
     rules_count: int = 0
     enabled_rules_count: int = 0
+    latest_rule_time: Optional[datetime] = Field(None, description="最新规则的创建时间")
 
     class Config:
         from_attributes = True
