@@ -74,3 +74,7 @@ django>=4.2.0
 
 # ============ Optional: MySQL support for Kunlun-M Web mode ============
 # mysqlclient>=2.2.0
+
+# ============ Scheduler ============
+APScheduler>=3.10.4
+

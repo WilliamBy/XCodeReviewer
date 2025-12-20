@@ -7,6 +7,11 @@ from app.core.config import settings
 from app.api.v1.api import api_router
 from app.db.session import AsyncSessionLocal
 from app.db.init_db import init_db
+from app.core.scheduler import SchedulerService
+from app.services.rule_updater import RuleUpdaterService
+from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.date import DateTrigger
+from datetime import datetime, timedelta
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -88,11 +93,32 @@ async def lifespan(app: FastAPI):
     logger.info("DeepAudit 后端服务已启动")
     logger.info(f"API 文档: http://localhost:8000/docs")
     logger.info("=" * 50)
+    logger.info("=" * 50)
     logger.info("演示账户: demo@example.com / demo123")
     logger.info("=" * 50)
 
+    # 启动后台任务调度器
+    SchedulerService.start()
+    
+    # 添加定时任务: 每日同步 CVE
+    SchedulerService.add_job(
+        RuleUpdaterService.sync_cve_rules,
+        IntervalTrigger(hours=24),
+        id="cve_sync_daily",
+        replace_existing=True
+    )
+    
+    # 启动时立即运行一次 (延迟10秒，等待数据库连接稳定)
+    SchedulerService.add_job(
+        RuleUpdaterService.sync_cve_rules,
+        DateTrigger(run_date=datetime.now() + timedelta(seconds=10)),
+        id="cve_sync_startup",
+        replace_existing=True
+    )
+
     yield
 
+    SchedulerService.stop()
     logger.info("DeepAudit 后端服务已关闭")
 
 
